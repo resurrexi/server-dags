@@ -1,24 +1,44 @@
-from airflow.decorators import dag, task
-from airflow.utils.dates import days_ago
 import json
 
+from airflow.decorators import dag, task
+from airflow.exceptions import AirflowFailException
+from airflow.models.param import Param
+from airflow.utils.dates import days_ago
 
-@dag(schedule=None, start_date=days_ago(1), catchup=False)
+
+@dag(
+    schedule=None,
+    start_date=days_ago(1),
+    catchup=False,
+    params={
+        "anime": Param(
+            type="string",
+            title="Anime Title",
+            description="Enter the name of the anime.",
+        )
+    },
+)
 def search_anime():
-    # @task.bash(output_processor=lambda x: json.loads(x))
-    # def search_for_anime():
-    #     return "fastanime search -t 'cross ange' --search-results-only"
+    @task.bash(output_processor=lambda x: json.loads(x))
+    def search_for_anime(**context):
+        anime = context["params"]["anime"]
+
+        return f"fastanime grab -t '{anime}' --search-results-only"
 
     @task
-    def search_for_anime():
-        from click.testing import CliRunner
-        from fastanime.cli import run_cli
+    def parse_results(**context):
+        ti = context["ti"]
 
-        runner = CliRunner(env={"FASTANIME_CACHE_REQUESTS": "false"})
-        result = runner.invoke(run_cli, ["grab", "-t", "'cross ange'", "--search-results-only"])
+        task_xcom = ti.xcom_pull(task_ids="search_for_anime", key="return_value")
+        results = task_xcom["results"]
 
-        print(result)
+        if len(results) > 1:
+            raise AirflowFailException("More than 1 result returned")
 
-    search_for_anime()
+        ti.xcom_push(key="anime_title", value=results[0]["title"])
+        ti.xcom_push(key="episode_count", value=results[0]["availableEpisodes"]["sub"])
+
+    search_for_anime() >> parse_results()
+
 
 search_anime()

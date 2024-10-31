@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "server-dags"
+version = "0.1.0"
+description = ""
+authors = ["Liquan Yang <yang.liquan87@gmail.com>"]
+readme = "README.md"
+packages = [{include = "server_dags"}]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.13"
+apache-airflow = "2.10.2"
+fastanime = "2.6.9"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.7.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

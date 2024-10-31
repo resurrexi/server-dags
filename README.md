@@ -15,15 +15,23 @@ touch .env
 ```sh
 echo -e "AIRFLOW_UID=$(id -u)" >> .env
 echo -e "AIRFLOW_VERSION=2.10.2" >> .env
+echo -e "SHARE_DIR=/home/${USER}/Videos" >> .env
 ```
 
-3. Build docker image
+3. Create folders for FastAnime
+
+```sh
+mkdir -p .cache/FastAnime
+mkdir -p .config/fastanime
+```
+
+4. Build docker image
 
 ```sh
 docker compose build
 ```
 
-4. Run docker image
+5. Run docker image
 
 ```sh
 docker compose up airflow-init && docker oompose up -d

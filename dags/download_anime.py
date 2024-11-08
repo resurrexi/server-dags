@@ -60,16 +60,18 @@ def download_anime():
 
         return f"fastanime download -t '{anime}'"
     
+    show_options = show_options()
     download = download()
 
     (
         search_for_anime()
         >> parse_results()
         >> (
-            show_options() >> download,
+            show_options,
             download,
         )
     )
+    show_options >> download
 
 
 download_anime()

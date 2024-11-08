@@ -50,7 +50,6 @@ def download_anime():
             {"id": result["id"], "title": result["title"]} for result in options
         ]
 
-        # TODO: send text with choices
         return parsed_options
 
     @task.bash
@@ -65,7 +64,7 @@ def download_anime():
         search_for_anime()
         >> parse_results()
         >> (
-            show_options(),
+            show_options() >> download(),
             download(),
         )
     )

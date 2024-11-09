@@ -54,12 +54,10 @@ def download_anime():
 
     @task.bash
     def download(**context):
-        ti = context["ti"]
-
-        anime = ti.xcom_pull(task_ids="parse_results", key="anime_title")
+        anime = context["params"]["anime"]
 
         return f"fastanime download -t '{anime}' --silent --wait-time 1"
-    
+
     show_options = show_options()
     download = download()
 

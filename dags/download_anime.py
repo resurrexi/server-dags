@@ -58,7 +58,7 @@ def download_anime():
 
         anime = ti.xcom_pull(task_ids="parse_results", key="anime_title")
 
-        return f"fastanime download -t '{anime}'"
+        return f"fastanime download -t '{anime}' --silent --wait-time 1"
     
     show_options = show_options()
     download = download()

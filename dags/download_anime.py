@@ -52,7 +52,7 @@ def download_anime():
 
         return parsed_options
 
-    @task.bash
+    @task.bash(trigger_rule="one_success")
     def download(**context):
         anime = context["params"]["anime"]
 

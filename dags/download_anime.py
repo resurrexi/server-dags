@@ -20,11 +20,19 @@ _ALLANIME_TEMPLATE = "allmanga.to/bangumi/{anime_id}"
     },
 )
 def download_anime():
-    @task.bash(output_processor=lambda x: json.loads(x))
+    @task
     def search_for_anime(**context):
+        from fastanime.AnimeProvider import AnimeProvider
+
         anime = context["params"]["anime"]
 
-        return f"fastanime grab -t '{anime}' --search-results-only"
+        provider = AnimeProvider("allanime")
+        search_results = provider.search_for_anime(
+            anime,
+            translation_type="sub",
+        )
+
+        return search_results
 
     @task.branch
     def parse_results(**context):

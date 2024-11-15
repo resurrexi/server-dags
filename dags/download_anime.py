@@ -1,10 +1,7 @@
-import json
-
 from airflow.decorators import dag, task
+from airflow.exceptions import AirflowFailException
 from airflow.models.param import Param
 from airflow.utils.dates import days_ago
-
-_ALLANIME_TEMPLATE = "allmanga.to/bangumi/{anime_id}"
 
 
 @dag(
@@ -60,24 +57,66 @@ def download_anime():
 
         return parsed_options
 
-    @task.bash(trigger_rule="one_success")
-    def download(**context):
+    @task(trigger_rule="one_success")
+    def get_episodes(**context):
+        from fastanime.AnimeProvider import AnimeProvider
+        from fastanime.libs.common.mini_anilist import get_basic_anime_info_by_title
+        from fastanime.Utility.data import anime_normalizer
+        from thefuzz import fuzz
+
+        ti = context["ti"]
         anime = context["params"]["anime"]
 
-        return f"fastanime download -t '{anime}' --silent --wait-time 1"
+        task_xcom = ti.xcom_pull(task_ids="search_for_anime", key="return_value")
+        results = task_xcom["results"]
+        results_ = {result["title"]: result for result in results}
+        closest_match = max(
+            results_.keys(),
+            key=lambda title: fuzz.ratio(
+                anime_normalizer.get(title, title),
+                anime,
+            ),
+        )
+
+        provider = AnimeProvider("allanime")
+        fetched_anime = provider.get_anime(results_[closest_match]["id"])
+
+        if not fetched_anime:
+            raise AirflowFailException("Failed to find anime")
+
+        # get episodes
+        episodes = sorted(
+            fetched_anime["availableEpisodesDetail"]["sub"],
+            key=float,
+        )
+        ti.xcom_push(key="episodes", value=episodes)
+
+        # normalize titles
+        anilist_anime_info = get_basic_anime_info_by_title(fetched_anime["title"])
+        ti.xcom_push(key="anilist_anime_info", value=anilist_anime_info)
+
+    @task
+    def download_episode(**context):
+        from fastanime.constants import USER_VIDEOS_DIR
+
+        # TODO: get episode top stream link
+        # TODO: get normalized episode title using `anilist_anime_info`
+        # TODO: get preferred subtitle url
+        # TODO: download episode
+        return USER_VIDEOS_DIR
 
     show_options = show_options()
-    download = download()
+    get_episodes = get_episodes()
 
     (
         search_for_anime()
         >> parse_results()
         >> (
             show_options,
-            download,
+            get_episodes,
         )
     )
-    show_options >> download
+    show_options >> get_episodes >> download_episode()
 
 
 download_anime()

@@ -15,6 +15,7 @@ from airflow.utils.dates import days_ago
             description="Enter the name of the anime.",
         )
     },
+    render_template_as_native_obj=True,
 )
 def download_anime():
     @task
@@ -22,8 +23,8 @@ def download_anime():
         from fastanime.AnimeProvider import AnimeProvider
 
         anime = context["params"]["anime"]
-
         provider = AnimeProvider("allanime")
+
         search_results = provider.search_for_anime(
             anime,
             translation_type="sub",
@@ -44,7 +45,7 @@ def download_anime():
 
         ti.xcom_push(key="anime_title", value=results[0]["title"])
         ti.xcom_push(key="episode_count", value=results[0]["availableEpisodes"]["sub"])
-        return "download"
+        return "get_episodes"
 
     @task
     def show_options(**context):
@@ -60,7 +61,6 @@ def download_anime():
     @task(trigger_rule="one_success")
     def get_episodes(**context):
         from fastanime.AnimeProvider import AnimeProvider
-        from fastanime.libs.common.mini_anilist import get_basic_anime_info_by_title
         from fastanime.Utility.data import anime_normalizer
         from thefuzz import fuzz
 
@@ -89,24 +89,73 @@ def download_anime():
             fetched_anime["availableEpisodesDetail"]["sub"],
             key=float,
         )
-        ti.xcom_push(key="episodes", value=episodes)
 
-        # normalize titles
-        anilist_anime_info = get_basic_anime_info_by_title(fetched_anime["title"])
-        ti.xcom_push(key="anilist_anime_info", value=anilist_anime_info)
+        ti.xcom_push(key="anime_id", value=fetched_anime["id"])
+        ti.xcom_push(key="anime_title", value=fetched_anime["title"])
+
+        return episodes
 
     @task
-    def download_episode(**context):
+    def download_episode(episode, get_episodes_task_id="get_episodes", **context):
+        from fastanime.AnimeProvider import AnimeProvider
+        from fastanime.cli.utils.utils import (
+            filter_by_quality,
+            move_preferred_subtitle_lang_to_top,
+        )
         from fastanime.constants import USER_VIDEOS_DIR
+        from fastanime.Utility.downloader.downloader import downloader
 
-        # TODO: get episode top stream link
-        # TODO: get normalized episode title using `anilist_anime_info`
-        # TODO: get preferred subtitle url
-        # TODO: download episode
+        ti = context["ti"]
+        anime_id = ti.xcom_pull(task_ids=get_episodes_task_id, key="anime_id")
+        anime_title = ti.xcom_pull(task_ids=get_episodes_task_id, key="anime_title")
+
+        # get stream link
+        provider = AnimeProvider("allanime")
+        # need to set new instance provider's store
+        provider.anime_provider.store.set(
+            anime_id, "anime_info", {"title": anime_title}
+        )
+        streams = provider.get_episode_streams(anime_id, episode, "sub")
+        if not streams:
+            raise AirflowFailException("Failed to get streams")
+
+        server_name = next(streams, None)
+        if not server_name:
+            raise AirflowFailException("Failed fetching top server")
+
+        stream_link = filter_by_quality("1080", server_name["links"])
+        if not stream_link:
+            raise AirflowFailException("No streams found")
+
+        link = stream_link["link"]
+        provider_headers = server_name["headers"]
+        subtitles = server_name["subtitles"]
+        episode_title = f"{anime_title}; Episode {str(episode).zfill(2)}"
+        print(episode_title)
+
+        # get preferred subtitle url
+        subtitles = move_preferred_subtitle_lang_to_top(subtitles, "eng")
+
+        downloader._download_file(
+            link,
+            anime_title,
+            episode_title,
+            USER_VIDEOS_DIR,
+            True,
+            vid_format="best[height<=1080]/bestvideo[height<=1080]+bestaudio/best",
+            force_unknown_ext=True,
+            verbose=False,
+            headers=provider_headers,
+            sub=subtitles[0]["url"] if subtitles else "",
+            merge=True,
+            clean=True,
+            prompt=False,
+        )
         return USER_VIDEOS_DIR
 
     show_options = show_options()
     get_episodes = get_episodes()
+    download_episodes = download_episode.expand(episode=get_episodes)
 
     (
         search_for_anime()
@@ -116,7 +165,7 @@ def download_anime():
             get_episodes,
         )
     )
-    show_options >> get_episodes >> download_episode()
+    show_options >> get_episodes >> download_episodes
 
 
 download_anime()

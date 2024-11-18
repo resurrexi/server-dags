@@ -97,7 +97,7 @@ def download_anime():
 
         return episodes
 
-    @task(map_index_template="{{ task.episode }}")
+    @task(map_index_template="{{ episode_map_index }}")
     def download_episode(episode, get_episodes_task_id="get_episodes", **context):
         from fastanime.AnimeProvider import AnimeProvider
         from fastanime.cli.utils.utils import (
@@ -108,6 +108,7 @@ def download_anime():
         from fastanime.Utility.downloader.downloader import downloader
 
         ti = context["ti"]
+        context["episode_map_index"] = f"Ep. {str(episode).zfill(2)}"
         anime_id = ti.xcom_pull(task_ids=get_episodes_task_id, key="anime_id")
         anime_title = ti.xcom_pull(task_ids=get_episodes_task_id, key="anime_title")
 

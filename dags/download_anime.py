@@ -97,7 +97,7 @@ def download_anime():
 
         return episodes
 
-    @task
+    @task(map_index_template="{{ task.episode }}")
     def download_episode(episode, get_episodes_task_id="get_episodes", **context):
         from fastanime.AnimeProvider import AnimeProvider
         from fastanime.cli.utils.utils import (
@@ -149,7 +149,6 @@ def download_anime():
             clean=True,
             prompt=False,
         )
-        return USER_VIDEOS_DIR
 
     show_options = show_options()
     get_episodes = get_episodes()

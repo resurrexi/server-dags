@@ -3,6 +3,8 @@ from airflow.exceptions import AirflowFailException
 from airflow.models.param import Param
 from airflow.utils.dates import days_ago
 
+_SERVER = "Yt"
+
 
 @dag(
     schedule=None,
@@ -15,7 +17,7 @@ from airflow.utils.dates import days_ago
             description="Enter the name of the anime.",
         )
     },
-    render_template_as_native_obj=True,
+    max_active_tasks=3,
 )
 def download_anime():
     @task
@@ -119,19 +121,15 @@ def download_anime():
         if not streams:
             raise AirflowFailException("Failed to get streams")
 
-        server_name = next(streams, None)
-        if not server_name:
-            raise AirflowFailException("Failed fetching top server")
-
-        stream_link = filter_by_quality("1080", server_name["links"])
+        servers = {server["server"]: server for server in streams}
+        stream_link = filter_by_quality("1080", servers[_SERVER]["links"])
         if not stream_link:
             raise AirflowFailException("No streams found")
 
         link = stream_link["link"]
-        provider_headers = server_name["headers"]
-        subtitles = server_name["subtitles"]
+        provider_headers = servers[_SERVER]["headers"]
+        subtitles = servers[_SERVER]["subtitles"]
         episode_title = f"{anime_title}; Episode {str(episode).zfill(2)}"
-        print(episode_title)
 
         # get preferred subtitle url
         subtitles = move_preferred_subtitle_lang_to_top(subtitles, "eng")
